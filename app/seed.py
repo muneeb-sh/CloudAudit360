@@ -6,7 +6,7 @@ import yaml
 from sqlalchemy.orm import Session
 
 from app.auth import hash_password
-from app.config import DATA_DIR, get_settings
+from app.config import DATA_DIR, DEFAULT_ADMIN_PASSWORD, get_settings
 from app.models import CheckControlMap, Control, Policy, User
 
 
@@ -15,17 +15,13 @@ def load_yaml(path: Path) -> dict | list:
         return yaml.safe_load(f)
 
 
-class SetupError(RuntimeError):
-    """Raised when required setup values (e.g. ADMIN_PASSWORD) are missing."""
+def ensure_admin(db: Session) -> bool:
+    """Create the dashboard admin if it does not exist yet. Returns True if created.
 
-
-def create_admin(db: Session) -> bool:
-    """Create the dashboard admin from ADMIN_USERNAME/ADMIN_PASSWORD. Returns True if created."""
+    Uses ADMIN_USERNAME / ADMIN_PASSWORD (default admin / admin). With the default
+    password the account must change it at first sign-in. An existing user is never touched.
+    """
     settings = get_settings()
-    if not settings.admin_password:
-        raise SetupError(
-            "ADMIN_PASSWORD is not set. Add it to .env (see .env.example) and run `init` again."
-        )
     if db.query(User).filter(User.username == settings.admin_username).first():
         return False
     db.add(
@@ -33,10 +29,31 @@ def create_admin(db: Session) -> bool:
             username=settings.admin_username,
             password_hash=hash_password(settings.admin_password),
             role="admin",
+            must_change_password=settings.admin_password == DEFAULT_ADMIN_PASSWORD,
         )
     )
     db.commit()
     return True
+
+
+def reset_admin_password(db: Session) -> User:
+    """Set the admin back to the default password and force a change at next sign-in."""
+    settings = get_settings()
+    user = db.query(User).filter(User.username == settings.admin_username).first()
+    if user is None:
+        ensure_admin(db)
+        user = db.query(User).filter(User.username == settings.admin_username).one()
+    user.password_hash = hash_password(DEFAULT_ADMIN_PASSWORD)
+    user.role = "admin"
+    user.must_change_password = True
+    db.commit()
+    return user
+
+
+def admin_has_default_password(db: Session) -> bool:
+    """True while the configured admin still has to replace the default password."""
+    user = db.query(User).filter(User.username == get_settings().admin_username).first()
+    return bool(user and user.must_change_password)
 
 
 def seed_controls(db: Session) -> dict[tuple[str, str], Control]:

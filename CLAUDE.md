@@ -14,13 +14,15 @@ Windows dev box; the venv is `.venv` (`.venv\Scripts\Activate.ps1`, or call `.ve
 pip install -r requirements.txt
 pytest -q                                   # all tests
 pytest -q tests/test_checks.py::test_secure_account_passes_every_check   # single test
-python -m app.cli init                      # create DB, seed frameworks, create admin (needs ADMIN_PASSWORD)
+python -m app.cli help [COMMAND]            # usage + examples (also -h / --help)
+python -m app.cli init                      # optional: create DB, seed frameworks, create admin (serve/scan/report do it too)
+python -m app.cli reset-admin [--yes]       # admin password back to "admin", forced change at next sign-in
 python -m app.cli scan [--profile P] [--region R ...] [--label L]
 python -m app.cli report [--scan N] [--type audit|technical] [--format html|pdf]
 python -m app.cli serve [--port 8000]       # or: uvicorn app.main:app
 ```
 
-There is no linter config. Settings come from `.env` (see `.env.example`) via `app/config.py` (pydantic-settings).
+There is no linter config. Settings come from an optional `.env` (see `.env.example`) via `app/config.py` (pydantic-settings); every setting has a working default.
 
 ## Architecture
 
@@ -31,7 +33,8 @@ The scan pipeline is `app/pipeline.py:run_scan`: **Collect → Assess → Risk r
 - **Assess** (`app/assessment/`): checks are functions registered with `@register_check("check_id")` in `checks/*.py`. Importing `app.assessment.checks` registers them. They return `NormalizedFinding` (`app/schemas.py`) with PASS/FAIL. `engine.apply_collect_errors` maps a check to its service by check-id prefix (`CHECK_SERVICE`), so a new check needs a prefix that is in that map. Failed collection turns findings into ERROR, so missing data never reads as PASS. `persist_findings` creates `Asset` rows for ARNs it hasn't seen.
 - **Risk register** (`app/grc/register.py`, scoring in `grc/risk.py` + `data/risk_config.yaml`): one `Risk` per `finding_key = check_id + asset ARN`. FAIL creates or updates the risk; a later PASS marks it mitigated; ERROR is ignored. **Real ARNs matter**: placeholder or duplicate ARNs collapse distinct issues into one risk.
 - **Compliance** (`app/grc/compliance.py`): `CheckControlMap` (from `data/frameworks/mapping.yaml`) links check IDs to controls (`controls.yaml`). A control is FAIL if any linked finding fails, EXCEPTION if all failures have active exceptions, NOT_ASSESSED if there are no results or only ERRORs, otherwise PASS. `framework_scores()` feeds the dashboard, CLI summary and reports.
-- **Seeding** (`app/seed.py`): `seed_reference` (controls, mappings, policies; idempotent) runs on every app startup. `create_admin` runs only from `init` and needs `ADMIN_PASSWORD`.
+- **Seeding** (`app/seed.py`): `seed_reference` (controls, mappings, policies; idempotent) runs on every app startup. `ensure_admin` also runs on startup and in the CLI: it creates `ADMIN_USERNAME`/`ADMIN_PASSWORD` (default admin/admin) if missing and never touches an existing user. With the default password, `User.must_change_password` is set, and the middleware in `app/main.py` sends every request except `/login`, `/logout`, `/change-password`, `/static` and `/health` to `/change-password` (`/api` gets a 403) until it is changed. `SECRET_KEY` defaults to a key generated once into `.secret_key`. `.env` is optional.
+- **Late columns**: there are no migrations, so columns added to existing tables go in `app/db.py:_LATE_COLUMNS` and `init_db` adds them to old database files.
 - **Web** (`app/main.py`, `app/web/routes_*.py`): server-rendered Jinja2 + Tailwind/Chart.js from CDN, with session-cookie auth (`app/auth.py`, roles admin/auditor/viewer). The JSON API lives under `/api`.
 - **Reports** (`app/reporting/builder.py`): Jinja2 HTML. PDF via WeasyPrint is optional and lazily imported; it falls back to HTML.
 - **DB**: SQLAlchemy 2.x, `Base.metadata.create_all` (no migrations). `Scan.environment` is a legacy column kept for old SQLite files. Use `label`.

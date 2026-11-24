@@ -12,6 +12,12 @@
 
   <div class="card w-full max-w-md p-8 lg:justify-self-end">
     <h2 class="text-2xl font-semibold mb-6">Sign in</h2>
+    {% if first_run %}
+    <div class="mb-4 rounded-md border border-sea-700 bg-sea-700/20 px-3 py-2 text-sm text-sea-100">
+      First launch: sign in as <strong>{{ admin_username }}</strong> with password <strong>{{ default_password }}</strong>.
+      You will be asked to choose a new password.
+    </div>
+    {% endif %}
     {% if error %}
     <div class="mb-4 text-sm text-red-300">{{ error }}</div>
     {% endif %}

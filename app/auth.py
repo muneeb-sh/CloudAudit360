@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
@@ -63,6 +64,20 @@ def get_current_user(
         if user:
             return user
     return None
+
+
+def user_from_request(request: Request, db: Session) -> User | None:
+    """Resolve the user outside FastAPI dependencies (used by middleware)."""
+    credentials = None
+    header = request.headers.get("authorization", "")
+    scheme, _, param = header.partition(" ")
+    if scheme.lower() == "basic" and param:
+        try:
+            username, _, password = base64.b64decode(param).decode("utf-8").partition(":")
+            credentials = HTTPBasicCredentials(username=username, password=password)
+        except (ValueError, UnicodeDecodeError):
+            credentials = None
+    return get_current_user(request, db, credentials)
 
 
 def require_user(user: Annotated[User | None, Depends(get_current_user)]) -> User:

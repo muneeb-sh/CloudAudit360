@@ -25,17 +25,19 @@ python -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 
-cp .env.example .env                 # Windows: copy .env.example .env
-# edit .env: set ADMIN_PASSWORD and SECRET_KEY (any long random string)
-
 aws configure --profile audit        # paste the read-only access key
 export AWS_PROFILE=audit             # Windows: $env:AWS_PROFILE = "audit"
 
-python -m app.cli init               # create DB + admin user
 python -m app.cli scan               # scan the account
 python -m app.cli report             # HTML audit report for the latest scan
 python -m app.cli serve              # dashboard at http://127.0.0.1:8000
 ```
+
+Sign in to the dashboard as **admin / admin**. On first sign-in you have to choose a new password before anything else is available.
+
+No `.env` file is needed. The database, the admin user and a session secret (kept in `.secret_key`) are created on first run. Copy `.env.example` to `.env` only to set `AWS_PROFILE` / `AWS_REGIONS` or override another default.
+
+Run `python -m app.cli help` (or `-h`) for every command, and `python -m app.cli help scan` for one command's options and examples. If you forget the dashboard password, `python -m app.cli reset-admin` sets it back to `admin` and asks for a new one at the next sign-in.
 
 Or run `scripts/scan_aws.sh` (or `scripts\scan_aws.ps1`), which checks the credentials, scans and writes the report in one go.
 
@@ -77,7 +79,7 @@ Control catalogue and mappings live in `data/frameworks/`, and risk scoring sett
 
 ## Dashboard
 
-`python -m app.cli serve` starts the dashboard. Sign in with `ADMIN_USERNAME` / `ADMIN_PASSWORD` from `.env`. Pages: Overview, Trends, Findings, Compliance, Risk register, Scans (history and compare), Reviews, Reports.
+`python -m app.cli serve` starts the dashboard. Sign in as `admin` / `admin` the first time (or `ADMIN_USERNAME` / `ADMIN_PASSWORD` if you set them in `.env`); the default password must be changed before you continue. Any user can change their password later from the header. Pages: Overview, Trends, Findings, Compliance, Risk register, Scans (history and compare), Reviews, Reports.
 
 ## Safety notes
 
