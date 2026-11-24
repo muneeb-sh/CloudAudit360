@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Login — CloudAudit360{% endblock %}
+{% block content %}
+<div class="min-h-[75vh] grid lg:grid-cols-2 gap-10 items-center">
+  <div>
+    <p class="text-sea-600 text-sm font-medium mb-3">AWS security &amp; compliance auditing</p>
+    <h1 class="text-4xl md:text-5xl font-semibold tracking-tight leading-tight">CloudAudit360</h1>
+    <p class="mt-4 text-gray-300 text-lg max-w-lg leading-relaxed">
+      Read-only AWS security and compliance auditing. Collect, assess, map to frameworks, score risk, and report.
+    </p>
+  </div>
+
+  <div class="card w-full max-w-md p-8 lg:justify-self-end">
+    <h2 class="text-2xl font-semibold mb-6">Sign in</h2>
+    {% if error %}
+    <div class="mb-4 text-sm text-red-300">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="/login" class="space-y-4">
+      <div>
+        <label for="username" class="block text-sm text-gray-300 mb-1">Username</label>
+        <input id="username" name="username" autocomplete="username" class="w-full rounded-md bg-ink-950 border border-white/10 px-3 py-2.5 focus:outline-none focus:border-sea-600" required />
+      </div>
+      <div>
+        <label for="password" class="block text-sm text-gray-300 mb-1">Password</label>
+        <input id="password" type="password" name="password" autocomplete="current-password" class="w-full rounded-md bg-ink-950 border border-white/10 px-3 py-2.5 focus:outline-none focus:border-sea-600" required />
+      </div>
+      <button class="w-full rounded-md bg-sea-600 hover:bg-sea-500 text-white font-medium py-2.5 cursor-pointer">Sign in</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

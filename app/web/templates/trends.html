@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Trends — CloudAudit360{% endblock %}
+{% block content %}
+<div class="mb-6">
+  <p class="text-sea-600 text-sm font-medium mb-1">Trends</p>
+  <h1 class="text-2xl font-semibold">Posture over time</h1>
+  <p class="text-sm text-gray-400 mt-1">Compliance score and failed checks for each completed scan, labelled by scan label and date.</p>
+</div>
+
+<div class="grid lg:grid-cols-2 gap-4">
+  <div class="card p-4">
+    <h2 class="font-medium mb-1">Compliance score over time</h2>
+    <p class="text-xs text-gray-500 mb-3">Higher is better (target 100%).</p>
+    <canvas id="complianceChart" height="220"></canvas>
+  </div>
+  <div class="card p-4">
+    <h2 class="font-medium mb-1">Problems found per scan</h2>
+    <p class="text-xs text-gray-500 mb-3">Lower is better after hardening.</p>
+    <canvas id="riskChart" height="220"></canvas>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const labels = {{ labels|tojson }};
+const series = {{ compliance_series|tojson }};
+const openRisks = {{ open_risks|tojson }};
+new Chart(document.getElementById('complianceChart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      { label: 'CIS', data: series.CIS, borderColor: '#34d399', tension: 0.2 },
+      { label: 'ISO27001', data: series.ISO27001, borderColor: '#38bdf8', tension: 0.2 },
+      { label: 'NIST', data: series.NIST, borderColor: '#fbbf24', tension: 0.2 },
+    ]
+  },
+  options: {
+    scales: {
+      x: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } },
+      y: { min: 0, max: 100, ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } }
+    },
+    plugins: { legend: { labels: { color: '#d1d5db' } } }
+  }
+});
+new Chart(document.getElementById('riskChart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [{ label: 'Problems', data: openRisks, borderColor: '#f87171', backgroundColor: '#7f1d1d55', fill: true, tension: 0.2 }]
+  },
+  options: {
+    scales: {
+      x: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } },
+      y: { beginAtZero: true, ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } }
+    },
+    plugins: { legend: { labels: { color: '#d1d5db' } } }
+  }
+});
+</script>
+{% endblock %}
