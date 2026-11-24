@@ -26,4 +26,4 @@ reports/output/
 .ruff_cache/
 .claude/settings.local.json
 .secret_key
-claude.md
+CLAUDE.md
