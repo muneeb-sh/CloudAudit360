@@ -33,10 +33,52 @@
     {% endfor %}
   </table>
 
-  <h2>Evidence Samples</h2>
+  <h2>Shared Responsibility: Customer-side Results</h2>
+  <p>AWS secures the cloud itself. Every check below tests a control on the customer side of the Shared Responsibility Model.</p>
+  <table>
+    <tr><th>Customer responsibility</th>{% for m in responsibility.models %}<th>{{ m }}</th>{% endfor %}<th>Pass rate</th></tr>
+    {% for d in responsibility.domains %}
+    {% set t = responsibility.domain_totals[d] %}
+    <tr>
+      <td>{{ d }}</td>
+      {% for m in responsibility.models %}
+      {% set c = responsibility.cells.get((d, m)) %}
+      <td>{% if c %}{{ c.PASS }} pass / {{ c.FAIL }} fail{% else %}–{% endif %}</td>
+      {% endfor %}
+      <td>{{ '%.0f'|format(100 * t.PASS / (t.PASS + t.FAIL)) if (t.PASS + t.FAIL) else '–' }}%</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h2>Internet Attack Surface</h2>
+  <p>
+    Exposed resources: <strong>{{ surface.exposed_resources }}</strong> of {{ surface.checked_resources }} checked ·
+    open admin ports: {{ surface.open_admin_ports }} · public data stores: {{ surface.public_data_stores }} ·
+    IMDSv1 instances: {{ surface.imdsv1_instances }}
+  </p>
+  {% if surface.rows %}
+  <table>
+    <tr><th>Resource</th><th>Type</th><th>Region</th><th>Exposure findings</th></tr>
+    {% for r in surface.rows %}
+    <tr>
+      <td>{{ r.asset.name if r.asset else 'account setting' }}<br><code>{{ r.asset.arn if r.asset else '' }}</code></td>
+      <td>{{ r.asset.type if r.asset else '' }}</td>
+      <td>{{ r.asset.region if r.asset else '' }}</td>
+      <td>{% for f in r.fails %}[{{ f.severity }}] {{ f.title }}<br>{% endfor %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p>No internet-exposed resources found.</p>
+  {% endif %}
+
+  <h2>Evidence and Fixes for Failed Checks</h2>
   {% for f in findings if f.status == 'FAIL' %}
+  {% set fix = catalog_entry(f.check_id) %}
   <h3>{{ f.check_id }} — {{ f.title }}</h3>
   <pre>{{ f.evidence_json | tojson(indent=2) }}</pre>
+  {% if fix.console %}<p><strong>Console:</strong> {{ fix.console }}</p>{% endif %}
+  {% if fix.cli %}<p><strong>AWS CLI fix</strong> (replace &lt;PLACEHOLDERS&gt;):</p><pre>{{ fix.cli }}</pre>{% endif %}
   {% endfor %}
 
   {% if comparison %}

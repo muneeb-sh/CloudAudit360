@@ -30,31 +30,31 @@ new Chart(document.getElementById('complianceChart'), {
   data: {
     labels,
     datasets: [
-      { label: 'CIS', data: series.CIS, borderColor: '#34d399', tension: 0.2 },
-      { label: 'ISO27001', data: series.ISO27001, borderColor: '#38bdf8', tension: 0.2 },
-      { label: 'NIST', data: series.NIST, borderColor: '#fbbf24', tension: 0.2 },
+      { label: 'CIS', data: series.CIS, borderColor: '#1d2d3d', tension: 0.2 },
+      { label: 'ISO27001', data: series.ISO27001, borderColor: '#597ea3', tension: 0.2 },
+      { label: 'NIST', data: series.NIST, borderColor: '#94bce3', tension: 0.2 },
     ]
   },
   options: {
     scales: {
-      x: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } },
-      y: { min: 0, max: 100, ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } }
+      x: { ticks: { color: '#5d5d60' }, grid: { color: '#d4d4d7' } },
+      y: { min: 0, max: 100, ticks: { color: '#5d5d60' }, grid: { color: '#d4d4d7' } }
     },
-    plugins: { legend: { labels: { color: '#d1d5db' } } }
+    plugins: { legend: { labels: { color: '#1d1f20' } } }
   }
 });
 new Chart(document.getElementById('riskChart'), {
   type: 'line',
   data: {
     labels,
-    datasets: [{ label: 'Problems', data: openRisks, borderColor: '#f87171', backgroundColor: '#7f1d1d55', fill: true, tension: 0.2 }]
+    datasets: [{ label: 'Problems', data: openRisks, borderColor: '#416180', backgroundColor: '#749dc433', fill: true, tension: 0.2 }]
   },
   options: {
     scales: {
-      x: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } },
-      y: { beginAtZero: true, ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } }
+      x: { ticks: { color: '#5d5d60' }, grid: { color: '#d4d4d7' } },
+      y: { beginAtZero: true, ticks: { color: '#5d5d60' }, grid: { color: '#d4d4d7' } }
     },
-    plugins: { legend: { labels: { color: '#d1d5db' } } }
+    plugins: { legend: { labels: { color: '#1d1f20' } } }
   }
 });
 </script>

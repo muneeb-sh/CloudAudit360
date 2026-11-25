@@ -45,6 +45,13 @@ def _seed_insecure_resources(session: boto3.Session) -> None:
         IpPermissions=[{"IpProtocol": "tcp", "FromPort": 22, "ToPort": 22,
                         "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}],
     )
+    ami = ec2.describe_images()["Images"][0]["ImageId"]
+    ec2.run_instances(ImageId=ami, MinCount=1, MaxCount=1,
+                      MetadataOptions={"HttpTokens": "optional"})
+    vol = ec2.create_volume(AvailabilityZone="us-east-1a", Size=1)
+    snap = ec2.create_snapshot(VolumeId=vol["VolumeId"])
+    ec2.modify_snapshot_attribute(SnapshotId=snap["SnapshotId"], Attribute="createVolumePermission",
+                                  OperationType="add", GroupNames=["all"])
 
 
 def test_collector_only_makes_read_only_calls(aws, db):
@@ -68,6 +75,10 @@ def test_collector_only_makes_read_only_calls(aws, db):
     assert "FAIL" in by_check["sg_no_ssh_open_world"]
     assert "FAIL" in by_check["s3_public_access_blocked"]
     assert by_check["iam_user_mfa_enabled"] == ["FAIL"]
+    assert by_check["ec2_imdsv2_required"] == ["FAIL"]
+    assert "FAIL" in by_check["ec2_no_public_snapshots"]
+    assert "FAIL" in by_check["sg_default_restricts_all"]  # default SG keeps its allow-all egress
+    assert by_check["iam_no_user_attached_policies"] == ["PASS"]
 
 
 def test_access_denied_service_is_error_and_scan_continues(aws, db, monkeypatch):

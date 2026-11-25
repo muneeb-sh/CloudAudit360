@@ -19,6 +19,36 @@ def _iam_snapshots(snapshots: dict[str, Any]) -> dict[str, Any]:
     return snapshots.get("iam", {}).get("account", {})
 
 
+def _age_days(value: Any, now: datetime | None = None) -> int | None:
+    """Days since an AWS timestamp (datetime or ISO string); None if missing/unparseable."""
+    if not value or value == "None":
+        return None
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return ((now or datetime.now(timezone.utc)) - value).days
+
+
+def _no_users(check_id: str, title: str, severity: str) -> list[NormalizedFinding]:
+    return [
+        NormalizedFinding(
+            check_id=check_id,
+            source="custom",
+            asset_arn=None,
+            title=title,
+            description="No IAM users found to assess.",
+            severity=severity,
+            status="PASS",
+            evidence={"Users": []},
+            remediation="N/A",
+        )
+    ]
+
+
 @register_check("iam_root_mfa_enabled")
 def iam_root_mfa_enabled(snapshots: dict[str, Any]) -> list[NormalizedFinding]:
     cfg = _iam_snapshots(snapshots)
@@ -136,15 +166,7 @@ def iam_access_key_rotated_90d(snapshots: dict[str, Any]) -> list[NormalizedFind
     for user in cfg.get("Users", []):
         for key in user.get("AccessKeys", []):
             created = key.get("CreateDate")
-            age_days = None
-            if created:
-                if isinstance(created, str):
-                    created_dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
-                else:
-                    created_dt = created
-                if created_dt.tzinfo is None:
-                    created_dt = created_dt.replace(tzinfo=timezone.utc)
-                age_days = (now - created_dt).days
+            age_days = _age_days(created, now)
             stale = age_days is not None and age_days > max_age
             findings.append(
                 NormalizedFinding(
@@ -184,27 +206,105 @@ def iam_access_key_rotated_90d(snapshots: dict[str, Any]) -> list[NormalizedFind
 def iam_no_wildcard_admin_policy(snapshots: dict[str, Any]) -> list[NormalizedFinding]:
     cfg = _iam_snapshots(snapshots)
     wildcards = cfg.get("WildcardAdminPolicies", [])
-    # Also flag users with AdministratorAccess attached
-    admin_users = [
-        u
-        for u in cfg.get("Users", [])
-        if any(p.get("PolicyName") == "AdministratorAccess" for p in u.get("AttachedPolicies", []))
-    ]
-    fail = bool(wildcards) or bool(admin_users)
+    # Users with AdministratorAccess are reported per user by iam_user_no_admin_access.
     # Stable account-level ARN so PASS/FAIL map to the same risk register key
     return [
         NormalizedFinding(
             check_id="iam_no_wildcard_admin_policy",
             source="custom",
             asset_arn=f"arn:aws:iam::{account_id(snapshots)}:root",
-            title="No wildcard / full-admin IAM policies",
-            description="IAM policies must not grant Action:* Resource:* or AdministratorAccess broadly.",
+            title="No wildcard (*:*) customer-managed IAM policies",
+            description="Attached customer-managed policies must not grant Action:* on Resource:*.",
             severity="high",
-            status="FAIL" if fail else "PASS",
-            evidence={
-                "WildcardAdminPolicies": wildcards,
-                "AdminUsers": [u.get("UserName") for u in admin_users],
-            },
-            remediation="Replace AdministratorAccess with least-privilege policies.",
+            status="FAIL" if wildcards else "PASS",
+            evidence={"WildcardAdminPolicies": wildcards},
+            remediation="Replace Action:*/Resource:* statements with least-privilege policies.",
         )
     ]
+
+
+@register_check("iam_user_no_admin_access")
+def iam_user_no_admin_access(snapshots: dict[str, Any]) -> list[NormalizedFinding]:
+    findings = []
+    for user in _iam_snapshots(snapshots).get("Users", []):
+        attached = [p.get("PolicyName") for p in user.get("AttachedPolicies", [])]
+        is_admin = "AdministratorAccess" in attached
+        findings.append(
+            NormalizedFinding(
+                check_id="iam_user_no_admin_access",
+                source="custom",
+                asset_arn=user.get("Arn"),
+                title=f"IAM user {user.get('UserName')} has no AdministratorAccess",
+                description=(
+                    "Long-lived IAM users should not hold full administrator rights; use "
+                    "short-lived roles (SSO / AssumeRole) for administration."
+                ),
+                severity="high",
+                status="FAIL" if is_admin else "PASS",
+                evidence={"UserName": user.get("UserName"), "AttachedPolicies": attached},
+                remediation="Detach AdministratorAccess and grant admin through an assumable role instead.",
+            )
+        )
+    return findings or _no_users("iam_user_no_admin_access", "No IAM users with AdministratorAccess", "high")
+
+
+@register_check("iam_no_user_attached_policies")
+def iam_no_user_attached_policies(snapshots: dict[str, Any]) -> list[NormalizedFinding]:
+    findings = []
+    for user in _iam_snapshots(snapshots).get("Users", []):
+        attached = [p.get("PolicyName") for p in user.get("AttachedPolicies", [])]
+        inline = list(user.get("InlinePolicyNames", []))
+        findings.append(
+            NormalizedFinding(
+                check_id="iam_no_user_attached_policies",
+                source="custom",
+                asset_arn=user.get("Arn"),
+                title=f"IAM user {user.get('UserName')} gets permissions only through groups/roles",
+                description="Permissions should be granted via groups or roles, not policies attached directly to users.",
+                severity="low",
+                status="FAIL" if attached or inline else "PASS",
+                evidence={"UserName": user.get("UserName"), "AttachedPolicies": attached,
+                          "InlinePolicies": inline},
+                remediation="Move the user's policies to an IAM group and add the user to that group.",
+            )
+        )
+    return findings or _no_users(
+        "iam_no_user_attached_policies", "IAM permissions granted through groups", "low"
+    )
+
+
+@register_check("iam_unused_credentials_90d")
+def iam_unused_credentials_90d(snapshots: dict[str, Any]) -> list[NormalizedFinding]:
+    max_age = _risk_cfg().get("access_key_max_age_days", 90)
+    now = datetime.now(timezone.utc)
+    findings = []
+    for user in _iam_snapshots(snapshots).get("Users", []):
+        stale: list[str] = []
+        user_age = _age_days(user.get("CreateDate"), now)
+        if user.get("HasConsolePassword"):
+            pw_age = _age_days(user.get("PasswordLastUsed"), now)
+            if (pw_age is None and (user_age or 0) > max_age) or (pw_age or 0) > max_age:
+                stale.append("console password" + (" never used" if pw_age is None else f" unused {pw_age}d"))
+        for key in user.get("AccessKeys", []):
+            if key.get("Status", "Active") != "Active":
+                continue
+            used_age = _age_days((key.get("LastUsed") or {}).get("LastUsedDate"), now)
+            key_age = _age_days(key.get("CreateDate"), now)
+            if (used_age is None and (key_age or 0) > max_age) or (used_age or 0) > max_age:
+                stale.append(f"access key {key.get('AccessKeyId')}"
+                             + (" never used" if used_age is None else f" unused {used_age}d"))
+        findings.append(
+            NormalizedFinding(
+                check_id="iam_unused_credentials_90d",
+                source="custom",
+                asset_arn=user.get("Arn"),
+                title=f"No unused credentials for IAM user {user.get('UserName')}",
+                description=f"Console passwords and access keys unused for {max_age}+ days should be disabled.",
+                severity="medium",
+                status="FAIL" if stale else "PASS",
+                evidence={"UserName": user.get("UserName"), "Stale": stale,
+                          "PasswordLastUsed": str(user.get("PasswordLastUsed"))},
+                remediation="Disable the unused console password and deactivate/delete unused access keys.",
+            )
+        )
+    return findings or _no_users("iam_unused_credentials_90d", "No unused IAM credentials", "medium")

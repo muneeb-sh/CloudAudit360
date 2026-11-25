@@ -156,3 +156,16 @@ def test_init_db_adds_missing_column_to_old_database():
         assert db.query(User).filter(User.username == "old").one().must_change_password is False
     finally:
         db.close()
+
+
+@pytest.mark.parametrize("path, text", [
+    ("/responsibility", "Shared Responsibility Model"),
+    ("/attack-surface", "Internet attack surface"),
+])
+def test_cloud_pages_render_empty_state(path, text):
+    with _client() as client:
+        client.post("/login", data={"username": "admin", "password": "test-password"})
+        resp = client.get(path)
+        assert resp.status_code == 200
+        assert text in resp.text
+        assert "No scans yet" in resp.text

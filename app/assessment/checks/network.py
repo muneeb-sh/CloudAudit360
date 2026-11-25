@@ -127,6 +127,44 @@ def sg_no_all_traffic_open_world(snapshots: dict[str, Any]) -> list[NormalizedFi
     ]
 
 
+@register_check("sg_default_restricts_all")
+def sg_default_restricts_all(snapshots: dict[str, Any]) -> list[NormalizedFinding]:
+    findings: list[NormalizedFinding] = []
+    for sg_id, sg, arn in _security_groups(snapshots):
+        if sg.get("GroupName") != "default":
+            continue
+        ingress = sg.get("IpPermissions", [])
+        egress = sg.get("IpPermissionsEgress", [])
+        findings.append(
+            NormalizedFinding(
+                check_id="sg_default_restricts_all",
+                source="custom",
+                asset_arn=arn,
+                title=f"Default security group restricts all traffic: {sg_id} ({sg.get('VpcId', '')})",
+                description=(
+                    "The default security group of every VPC should have no inbound or outbound "
+                    "rules, so resources launched without an explicit group get no network access."
+                ),
+                severity="medium",
+                status="FAIL" if ingress or egress else "PASS",
+                evidence={"GroupId": sg_id, "IpPermissions": ingress, "IpPermissionsEgress": egress},
+                remediation="Remove all inbound and outbound rules from the default security group.",
+            )
+        )
+    return findings or [
+        NormalizedFinding(
+            check_id="sg_default_restricts_all",
+            source="custom",
+            title="Default security group restricts all traffic",
+            description="No default security groups found.",
+            severity="medium",
+            status="PASS",
+            evidence={},
+            remediation="N/A",
+        )
+    ]
+
+
 @register_check("vpc_flow_logs_enabled")
 def vpc_flow_logs_enabled(snapshots: dict[str, Any]) -> list[NormalizedFinding]:
     cfg = snapshots.get("ec2", {}).get("vpc-flow-logs", {})

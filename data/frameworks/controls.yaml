@@ -165,3 +165,23 @@ controls:
     control_ref: "5.2"
     title: Ensure no security groups allow ingress from 0.0.0.0/0 to remote admin ports
     description: Security groups should not allow unrestricted access to SSH/RDP.
+  - framework: CIS
+    control_ref: "1.12"
+    title: Ensure credentials unused for 90 days or more are disabled
+    description: Disabling unused console passwords and access keys reduces the window for credential abuse.
+  - framework: CIS
+    control_ref: "1.15"
+    title: Ensure IAM users receive permissions only through groups
+    description: Granting permissions through groups or roles keeps access consistent and reviewable.
+  - framework: CIS
+    control_ref: "2.3.3"
+    title: Ensure that public access is not given to RDS Instances
+    description: RDS instances should not be reachable from the internet via a public endpoint.
+  - framework: CIS
+    control_ref: "5.4"
+    title: Ensure the default security group of every VPC restricts all traffic
+    description: Default security groups should have no inbound or outbound rules.
+  - framework: CIS
+    control_ref: "5.6"
+    title: Ensure that EC2 Metadata Service only allows IMDSv2
+    description: IMDSv2 session tokens protect instance role credentials against SSRF attacks.

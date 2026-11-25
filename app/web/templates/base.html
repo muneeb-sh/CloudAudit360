@@ -8,97 +8,90 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/theme.css" />
   <script>
+    // The templates were written for a dark theme; these remaps turn the same classes into the light "Industry" palette.
     tailwind.config = {
       theme: {
         extend: {
           fontFamily: {
-            sans: ['Fira Sans', 'sans-serif'],
-            mono: ['Fira Code', 'monospace'],
+            sans: ['Barlow', 'system-ui', 'sans-serif'],
+            heading: ['Barlow Condensed', 'system-ui', 'sans-serif'],
+            mono: ['ui-monospace', 'SFMono-Regular', 'Consolas', 'monospace'],
           },
           colors: {
-            ink: { 950: '#0F172A', 900: '#192134', 800: '#1E293B', 700: '#334155' },
-            sea: { 500: '#047857', 600: '#059669', 700: '#065F46', 100: '#D1FAE5' },
+            white: '#1d1f20',
+            ink: { 950: '#f5f5f8', 900: '#f2f2f3', 800: '#e7e7ea', 700: '#d4d4d7' },
+            sea: { 100: '#1d2d3d', 500: '#597ea3', 600: '#416180', 700: '#416180' },
+            gray: { 100: '#1d1f20', 200: '#2b2b2d', 300: '#424244', 400: '#5d5d60', 500: '#7a7a7d', 600: '#98989b', 700: '#b7b7ba', 800: '#d4d4d7' },
+            red: { 200: '#991b1b', 300: '#b91c1c', 700: '#fca5a5', 800: '#fca5a5', 900: '#fee2e2' },
+            amber: { 200: '#92400e' },
           }
         }
       }
     }
   </script>
-  <style>
-    body {
-      background:
-        radial-gradient(900px 480px at 0% 0%, rgba(30,58,95,0.35), transparent 60%),
-        radial-gradient(800px 400px at 100% 0%, rgba(5,150,105,0.12), transparent 55%),
-        #0F172A;
-    }
-    .card { background: rgba(25,33,52,0.92); border: 1px solid rgba(255,255,255,0.08); border-radius: 0.75rem; }
-    .badge-critical { background:#7f1d1d; color:#fecaca; }
-    .badge-high { background:#7c2d12; color:#fed7aa; }
-    .badge-medium { background:#713f12; color:#fde68a; }
-    .badge-low { background:#1e3a8a; color:#bfdbfe; }
-    .badge-pass, .badge-ok { background:#064e3b; color:#a7f3d0; }
-    .badge-fail, .badge-problem { background:#7f1d1d; color:#fecaca; }
-    .nav-link { color:#94A3B8; transition: color 180ms ease; }
-    .nav-link:hover, .nav-link.active { color:#6EE7B7; }
-    a, button { transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease; }
-    @media (prefers-reduced-motion: reduce) {
-      * { transition: none !important; }
-    }
-  </style>
 </head>
-<body class="font-sans text-gray-100 min-h-screen">
-  <header class="border-b border-white/10 bg-ink-900/80 backdrop-blur sticky top-0 z-40">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-      <a href="{% if user %}/dashboard{% else %}/login{% endif %}" class="flex items-center gap-2">
-        <span class="inline-flex h-8 w-8 items-center justify-center rounded bg-sea-600 text-white font-bold text-sm">CA</span>
-        <div>
-          <div class="font-semibold tracking-tight text-white">CloudAudit360</div>
-          <div class="text-[11px] text-gray-400 -mt-0.5">AWS security &amp; compliance</div>
-        </div>
+<body class="font-sans min-h-screen">
+{% macro flash() -%}
+  {% if request.query_params.get('msg') %}
+  <div class="mb-5 border border-sea-500 bg-sea-700/10 px-4 py-2 text-sm text-sea-100">{{ request.query_params.get('msg')|replace('+', ' ') }}</div>
+  {% endif %}
+  {% if request.query_params.get('error') %}
+  <div class="mb-5 border border-red-800 bg-red-900 px-4 py-2 text-sm text-red-200">{{ request.query_params.get('error')|replace('+', ' ') }}</div>
+  {% endif %}
+  {%- endmacro %}
+  {% if user %}
+  {% set p = request.url.path %}
+  {% macro link(href, label) -%}
+    <a class="side-link {% if p.startswith(href) %}active{% endif %}" href="{{ href }}">{{ label }}</a>
+  {%- endmacro %}
+  <div class="min-h-screen lg:grid lg:grid-cols-[232px_1fr]">
+    <aside class="border-b lg:border-b-0 lg:border-r border-white/10 px-4 py-6 flex flex-col gap-7 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto">
+      <a href="/dashboard" class="flex items-center gap-2.5 px-2 text-sea-600">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg>
+        <span class="font-heading text-xl font-semibold text-white">CloudAudit360</span>
       </a>
-      {% if user %}
-      <nav class="hidden lg:flex items-center gap-5 text-sm">
-        <a class="nav-link {% if request.url.path.startswith('/dashboard') %}active{% endif %}" href="/dashboard">Overview</a>
-        <a class="nav-link {% if request.url.path.startswith('/findings') %}active{% endif %}" href="/findings">Problems</a>
-        <a class="nav-link {% if request.url.path.startswith('/controls') %}active{% endif %}" href="/controls">Compliance</a>
-        <a class="nav-link {% if request.url.path.startswith('/risks') %}active{% endif %}" href="/risks">Risks</a>
-        <a class="nav-link {% if request.url.path.startswith('/reports') %}active{% endif %}" href="/reports">Reports</a>
-        <details class="relative">
-          <summary class="nav-link cursor-pointer list-none">More</summary>
-          <div class="absolute right-0 mt-2 w-44 card p-2 text-sm z-50">
-            <a class="block px-3 py-2 rounded hover:bg-ink-800" href="/trends">Trends</a>
-            <a class="block px-3 py-2 rounded hover:bg-ink-800" href="/scans">All scans</a>
-            <a class="block px-3 py-2 rounded hover:bg-ink-800" href="/reviews">Reviews</a>
-            {% if user.role == 'admin' %}
-            <a class="block px-3 py-2 rounded hover:bg-ink-800" href="/admin">Admin</a>
-            {% endif %}
-          </div>
-        </details>
+      <nav class="flex flex-col gap-0.5" aria-label="Main">
+        {{ link('/dashboard', 'Overview') }}
+        {{ link('/findings', 'Problems') }}
+        {{ link('/controls', 'Compliance') }}
+        {{ link('/risks', 'Risks') }}
+        {{ link('/attack-surface', 'Attack surface') }}
+        {{ link('/reports', 'Reports') }}
+        <div class="kicker px-2.5 pt-5 pb-1.5 !text-xs">More</div>
+        {{ link('/responsibility', 'Shared responsibility') }}
+        {{ link('/trends', 'Trends') }}
+        {{ link('/scans', 'Scans') }}
+        {{ link('/reviews', 'Reviews') }}
+        {% if user.role == 'admin' %}{{ link('/admin', 'Admin') }}{% endif %}
       </nav>
-      <div class="flex items-center gap-3 text-sm">
-        <a href="/dashboard" class="lg:hidden text-sea-600 font-medium">Overview</a>
-        <span class="hidden sm:inline text-gray-400">{{ user.username }}</span>
-        <a href="/change-password" class="hidden sm:inline text-gray-300 hover:text-white">Change password</a>
-        <a href="/logout" class="text-gray-300 hover:text-white">Logout</a>
+      <div class="mt-auto border-t border-white/10 pt-4 px-2 flex flex-col gap-3">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 border border-sea-500 flex items-center justify-center font-heading text-sm text-sea-600 uppercase">{{ user.username[:2] }}</div>
+          <div class="flex flex-col leading-tight"><span class="text-sm font-medium">{{ user.username }}</span><span class="text-xs text-gray-400 capitalize">{{ user.role }}</span></div>
+        </div>
+        <div class="flex gap-4 text-sm">
+          <a href="/change-password" class="text-sea-600 hover:underline">Change password</a>
+          <a href="/logout" class="text-sea-600 hover:underline">Logout</a>
+        </div>
       </div>
-      {% endif %}
-    </div>
-  </header>
-
-  <main class="max-w-7xl mx-auto px-4 py-6">
-    {% if request.query_params.get('msg') %}
-    <div class="mb-4 rounded-lg border border-sea-700 bg-sea-700/20 px-4 py-2 text-sm text-sea-100">{{ request.query_params.get('msg')|replace('+', ' ') }}</div>
-    {% endif %}
-    {% if request.query_params.get('error') %}
-    <div class="mb-4 rounded-lg border border-red-800 bg-red-900/30 px-4 py-2 text-sm text-red-200">{{ request.query_params.get('error')|replace('+', ' ') }}</div>
-    {% endif %}
-    {% block content %}{% endblock %}
-  </main>
-
-  <footer class="border-t border-white/10 mt-10 py-6 text-center text-xs text-gray-500">
-    CloudAudit360: read-only AWS security and compliance auditing. Collect, assess, map to frameworks, score risk, and report.
-  </footer>
+    </aside>
+    <main class="min-w-0 px-4 sm:px-9 pt-7 pb-10">
+      {{ flash() }}
+      {% block content %}{% endblock %}
+      <footer class="border-t border-white/10 mt-10 pt-6 text-xs text-gray-500">
+        CloudAudit360: read-only AWS security and compliance auditing. Collect, assess, map to frameworks, score risk, and report.
+      </footer>
+    </main>
+  </div>
+  {% else %}
+  {# signed-out pages (login) override "bare" to go full-bleed #}
+  {% block bare %}
+  <main class="max-w-7xl mx-auto px-4 py-6">{{ flash() }}{{ self.content() }}</main>
+  {% endblock %}
+  {% endif %}
   {% block scripts %}{% endblock %}
 </body>
 </html>

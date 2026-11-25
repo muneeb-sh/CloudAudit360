@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.assessment import catalog
 from app.auth import get_current_user
 from app.db import get_db
 from app.models import Finding, Scan
@@ -66,5 +67,5 @@ def finding_detail(finding_id: int, request: Request, db: Session = Depends(get_
         return RedirectResponse("/findings?error=Finding+not+found", status_code=303)
     return templates.TemplateResponse(
         "finding_detail.html",
-        {"request": request, "user": user, "finding": finding},
+        {"request": request, "user": user, "finding": finding, "fix": catalog.entry(finding.check_id)},
     )

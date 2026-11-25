@@ -21,6 +21,7 @@ CHECK_SERVICE = {
     "sg": "ec2",
     "vpc": "ec2",
     "ebs": "ec2",
+    "ec2": "ec2",
     "cloudtrail": "cloudtrail",
     "guardduty": "guardduty",
     "kms": "kms",

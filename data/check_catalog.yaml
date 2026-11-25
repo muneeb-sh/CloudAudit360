@@ -1,0 +1,217 @@
+# Cloud-security metadata per check.
+#   domain            customer-side responsibility area (Shared Responsibility Model)
+#   service_model     AWS service category the check applies to:
+#                       Infrastructure  (IaaS: EC2, EBS, VPC - you manage OS, network, data)
+#                       Container       (PaaS: RDS - AWS runs the platform, you configure it)
+#                       Abstracted      (S3, KMS, CloudTrail, GuardDuty - you manage data, access, settings)
+#                       Account-wide    (IAM - identity applies to every service model)
+#   internet_exposure true if a FAIL means the resource is reachable/readable from the internet
+#   cli / console     how to fix a FAIL (placeholders in <ANGLE_BRACKETS>)
+
+iam_root_mfa_enabled:
+  domain: Identity & access
+  service_model: Account-wide
+  internet_exposure: false
+  console: Sign in as root, open Account (Security credentials), Multi-factor authentication, Assign MFA device.
+  cli: "# Root MFA can only be enabled from the console while signed in as root."
+
+iam_root_no_access_keys:
+  domain: Identity & access
+  service_model: Account-wide
+  internet_exposure: false
+  console: Sign in as root, open Security credentials, Access keys, then Deactivate and Delete each key.
+  cli: "# Root keys can only be deleted while signed in as root (console)."
+
+iam_user_mfa_enabled:
+  domain: Identity & access
+  service_model: Account-wide
+  internet_exposure: false
+  console: IAM, Users, <USER>, Security credentials, Assign MFA device.
+  cli: |-
+    aws iam create-virtual-mfa-device --virtual-mfa-device-name <USER>-mfa --outfile qr.png --bootstrap-method QRCodePNG
+    aws iam enable-mfa-device --user-name <USER> --serial-number arn:aws:iam::<ACCOUNT_ID>:mfa/<USER>-mfa --authentication-code1 <CODE1> --authentication-code2 <CODE2>
+
+iam_password_policy_strong:
+  domain: Identity & access
+  service_model: Account-wide
+  internet_exposure: false
+  console: IAM, Account settings, Password policy, Edit.
+  cli: aws iam update-account-password-policy --minimum-password-length 14 --require-symbols --require-numbers --require-uppercase-characters --require-lowercase-characters --password-reuse-prevention 24
+
+iam_access_key_rotated_90d:
+  domain: Identity & access
+  service_model: Account-wide
+  internet_exposure: false
+  console: IAM, Users, <USER>, Security credentials, Create access key, update apps, then deactivate the old key.
+  cli: |-
+    aws iam create-access-key --user-name <USER>
+    aws iam update-access-key --user-name <USER> --access-key-id <OLD_KEY_ID> --status Inactive
+    aws iam delete-access-key --user-name <USER> --access-key-id <OLD_KEY_ID>
+
+iam_no_wildcard_admin_policy:
+  domain: Identity & access
+  service_model: Account-wide
+  internet_exposure: false
+  console: IAM, Policies, <POLICY>, Edit, replace Action "*" / Resource "*" with specific actions and ARNs.
+  cli: aws iam create-policy-version --policy-arn <POLICY_ARN> --policy-document file://least-privilege.json --set-as-default
+
+iam_user_no_admin_access:
+  domain: Identity & access
+  service_model: Account-wide
+  internet_exposure: false
+  console: IAM, Users, <USER>, Permissions, remove AdministratorAccess; grant admin via an assumable role or IAM Identity Center.
+  cli: aws iam detach-user-policy --user-name <USER> --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
+
+iam_no_user_attached_policies:
+  domain: Identity & access
+  service_model: Account-wide
+  internet_exposure: false
+  console: IAM, User groups, create a group with the policies, add <USER>, then remove the user's direct policies.
+  cli: |-
+    aws iam add-user-to-group --group-name <GROUP> --user-name <USER>
+    aws iam detach-user-policy --user-name <USER> --policy-arn <POLICY_ARN>
+    aws iam delete-user-policy --user-name <USER> --policy-name <INLINE_POLICY>
+
+iam_unused_credentials_90d:
+  domain: Identity & access
+  service_model: Account-wide
+  internet_exposure: false
+  console: IAM, Users, <USER>, Security credentials, Manage console access (Disable) and deactivate unused keys.
+  cli: |-
+    aws iam delete-login-profile --user-name <USER>
+    aws iam update-access-key --user-name <USER> --access-key-id <KEY_ID> --status Inactive
+
+s3_public_access_blocked:
+  domain: Data protection
+  service_model: Abstracted
+  internet_exposure: true
+  console: S3, <BUCKET>, Permissions, Block public access, Edit, enable all four settings.
+  cli: aws s3api put-public-access-block --bucket <BUCKET> --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+
+s3_encryption_enabled:
+  domain: Data protection
+  service_model: Abstracted
+  internet_exposure: false
+  console: S3, <BUCKET>, Properties, Default encryption, Edit, SSE-KMS or SSE-S3.
+  cli: "aws s3api put-bucket-encryption --bucket <BUCKET> --server-side-encryption-configuration '{\"Rules\":[{\"ApplyServerSideEncryptionByDefault\":{\"SSEAlgorithm\":\"aws:kms\"}}]}'"
+
+s3_versioning_enabled:
+  domain: Data protection
+  service_model: Abstracted
+  internet_exposure: false
+  console: S3, <BUCKET>, Properties, Bucket Versioning, Edit, Enable.
+  cli: aws s3api put-bucket-versioning --bucket <BUCKET> --versioning-configuration Status=Enabled
+
+s3_tls_only_policy:
+  domain: Data protection
+  service_model: Abstracted
+  internet_exposure: false
+  console: S3, <BUCKET>, Permissions, Bucket policy, add a Deny statement for aws:SecureTransport = false.
+  cli: "aws s3api put-bucket-policy --bucket <BUCKET> --policy '{\"Statement\":[{\"Effect\":\"Deny\",\"Principal\":\"*\",\"Action\":\"s3:*\",\"Resource\":[\"arn:aws:s3:::<BUCKET>\",\"arn:aws:s3:::<BUCKET>/*\"],\"Condition\":{\"Bool\":{\"aws:SecureTransport\":\"false\"}}}]}'"
+
+sg_no_ssh_open_world:
+  domain: Network security
+  service_model: Infrastructure
+  internet_exposure: true
+  console: EC2, Security Groups, <SG_ID>, Inbound rules, Edit, remove 0.0.0.0/0 on port 22 (use SSM Session Manager or a VPN CIDR).
+  cli: aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 22 --cidr 0.0.0.0/0
+
+sg_no_rdp_open_world:
+  domain: Network security
+  service_model: Infrastructure
+  internet_exposure: true
+  console: EC2, Security Groups, <SG_ID>, Inbound rules, Edit, remove 0.0.0.0/0 on port 3389.
+  cli: aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 3389 --cidr 0.0.0.0/0
+
+sg_no_all_traffic_open_world:
+  domain: Network security
+  service_model: Infrastructure
+  internet_exposure: true
+  console: EC2, Security Groups, <SG_ID>, Inbound rules, Edit, remove the "All traffic" 0.0.0.0/0 rule.
+  cli: aws ec2 revoke-security-group-ingress --group-id <SG_ID> --ip-permissions IpProtocol=-1,IpRanges=[{CidrIp=0.0.0.0/0}]
+
+sg_default_restricts_all:
+  domain: Network security
+  service_model: Infrastructure
+  internet_exposure: true
+  console: VPC, Security Groups, default group of <VPC_ID>, delete every inbound and outbound rule.
+  cli: |-
+    aws ec2 revoke-security-group-ingress --group-id <SG_ID> --ip-permissions "$(aws ec2 describe-security-groups --group-ids <SG_ID> --query 'SecurityGroups[0].IpPermissions')"
+    aws ec2 revoke-security-group-egress --group-id <SG_ID> --ip-permissions "$(aws ec2 describe-security-groups --group-ids <SG_ID> --query 'SecurityGroups[0].IpPermissionsEgress')"
+
+vpc_flow_logs_enabled:
+  domain: Logging & monitoring
+  service_model: Infrastructure
+  internet_exposure: false
+  console: VPC, Your VPCs, <VPC_ID>, Flow logs, Create flow log (All traffic, to CloudWatch Logs or S3).
+  cli: aws ec2 create-flow-logs --resource-type VPC --resource-ids <VPC_ID> --traffic-type ALL --log-destination-type s3 --log-destination arn:aws:s3:::<LOG_BUCKET>
+
+cloudtrail_enabled_multiregion:
+  domain: Logging & monitoring
+  service_model: Abstracted
+  internet_exposure: false
+  console: CloudTrail, Trails, Create trail, apply to all regions, then make sure logging is On.
+  cli: |-
+    aws cloudtrail create-trail --name <TRAIL> --s3-bucket-name <LOG_BUCKET> --is-multi-region-trail --enable-log-file-validation
+    aws cloudtrail start-logging --name <TRAIL>
+
+cloudtrail_log_validation:
+  domain: Logging & monitoring
+  service_model: Abstracted
+  internet_exposure: false
+  console: CloudTrail, Trails, <TRAIL>, General details, Edit, enable Log file validation.
+  cli: aws cloudtrail update-trail --name <TRAIL> --enable-log-file-validation
+
+guardduty_enabled:
+  domain: Logging & monitoring
+  service_model: Abstracted
+  internet_exposure: false
+  console: GuardDuty (in <REGION>), Get started, Enable GuardDuty.
+  cli: aws guardduty create-detector --enable --region <REGION>
+
+ebs_default_encryption:
+  domain: Data protection
+  service_model: Infrastructure
+  internet_exposure: false
+  console: EC2 (in <REGION>), Settings, Data protection and security, EBS encryption, Manage, Enable.
+  cli: aws ec2 enable-ebs-encryption-by-default --region <REGION>
+
+ec2_imdsv2_required:
+  domain: Compute & workload
+  service_model: Infrastructure
+  internet_exposure: true
+  console: EC2, Instances, <INSTANCE_ID>, Actions, Instance settings, Modify instance metadata options, IMDSv2 Required.
+  cli: aws ec2 modify-instance-metadata-options --instance-id <INSTANCE_ID> --http-tokens required --http-endpoint enabled --region <REGION>
+
+ec2_no_public_snapshots:
+  domain: Data protection
+  service_model: Infrastructure
+  internet_exposure: true
+  console: EC2, Snapshots (or AMIs), <ID>, Actions, Modify permissions, Private.
+  cli: |-
+    aws ec2 modify-snapshot-attribute --snapshot-id <SNAPSHOT_ID> --attribute createVolumePermission --operation-type remove --group-names all --region <REGION>
+    aws ec2 modify-image-attribute --image-id <AMI_ID> --launch-permission "Remove=[{Group=all}]" --region <REGION>
+
+rds_encrypted:
+  domain: Data protection
+  service_model: Container
+  internet_exposure: false
+  console: RDS, Snapshots, take a snapshot of <DB>, Copy snapshot with encryption, Restore from the encrypted copy.
+  cli: |-
+    aws rds create-db-snapshot --db-instance-identifier <DB> --db-snapshot-identifier <DB>-snap
+    aws rds copy-db-snapshot --source-db-snapshot-identifier <DB>-snap --target-db-snapshot-identifier <DB>-snap-enc --kms-key-id <KMS_KEY>
+    aws rds restore-db-instance-from-db-snapshot --db-instance-identifier <DB>-enc --db-snapshot-identifier <DB>-snap-enc
+
+rds_not_public:
+  domain: Network security
+  service_model: Container
+  internet_exposure: true
+  console: RDS, Databases, <DB>, Modify, Connectivity, Additional configuration, Not publicly accessible.
+  cli: aws rds modify-db-instance --db-instance-identifier <DB> --no-publicly-accessible --apply-immediately
+
+kms_key_rotation_enabled:
+  domain: Data protection
+  service_model: Abstracted
+  internet_exposure: false
+  console: KMS, Customer managed keys, <KEY_ID>, Key rotation, enable automatic rotation.
+  cli: aws kms enable-key-rotation --key-id <KEY_ID>

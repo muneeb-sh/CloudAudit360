@@ -166,8 +166,21 @@ def _collect_iam(db: Session, scan: Scan, session: boto3.Session, account_id: st
             )
             key_details.append({**key, "LastUsed": last_used})
         attached = _paginate(iam, "list_attached_user_policies", "AttachedPolicies", UserName=uname)
+        inline = _paginate(iam, "list_user_policies", "PolicyNames", UserName=uname)
+        try:
+            iam.get_login_profile(UserName=uname)
+            has_password = True
+        except iam.exceptions.NoSuchEntityException:
+            has_password = False
         users_detail.append(
-            {**user, "MFADevices": mfa, "AccessKeys": key_details, "AttachedPolicies": attached}
+            {
+                **user,
+                "MFADevices": mfa,
+                "AccessKeys": key_details,
+                "AttachedPolicies": attached,
+                "InlinePolicyNames": inline,
+                "HasConsolePassword": has_password,
+            }
         )
         is_admin = any(p.get("PolicyName") == "AdministratorAccess" for p in attached)
         _upsert_asset(
@@ -289,6 +302,9 @@ def _collect_ec2(db, scan, session, regions, account_id, errors) -> str:
     flow_logs: list[dict] = []
     ebs_default: dict[str, bool] = {}
     volumes: list[dict] = []
+    instances: list[dict] = []
+    snapshots: list[dict] = []
+    images: list[dict] = []
     sg_count = 0
     for region in regions:
         try:
@@ -318,12 +334,67 @@ def _collect_ec2(db, scan, session, regions, account_id, errors) -> str:
             flow_logs += [{**fl, "Region": region} for fl in _paginate(ec2, "describe_flow_logs", "FlowLogs")]
             ebs_default[region] = bool(ec2.get_ebs_encryption_by_default().get("EbsEncryptionByDefault"))
             volumes += [{**v, "Region": region} for v in _paginate(ec2, "describe_volumes", "Volumes")]
+            instances += _collect_instances(db, ec2, region, account_id)
+            region_snaps, region_images = _collect_snapshots_images(db, ec2, region, account_id)
+            snapshots += region_snaps
+            images += region_images
         except Exception as exc:  # noqa: BLE001
             _record_error(errors, "ec2", region, exc)
     _store_snapshot(db, scan, "ec2", "vpc-flow-logs", {"Vpcs": vpcs, "FlowLogs": flow_logs})
     _store_snapshot(db, scan, "ec2", "ebs-default-encryption", {"Regions": ebs_default})
     _store_snapshot(db, scan, "ec2", "ebs-volumes", {"Volumes": volumes})
-    return f"{sg_count} security groups, {len(vpcs)} VPCs"
+    _store_snapshot(db, scan, "ec2", "instances", {"Instances": instances})
+    _store_snapshot(db, scan, "ec2", "snapshots-images", {"Snapshots": snapshots, "Images": images})
+    return f"{sg_count} security groups, {len(vpcs)} VPCs, {len(instances)} instances"
+
+
+def _collect_instances(db, ec2, region: str, account_id: str) -> list[dict]:
+    out = []
+    for reservation in _paginate(ec2, "describe_instances", "Reservations"):
+        for inst in reservation.get("Instances", []):
+            iid = inst["InstanceId"]
+            arn = f"arn:aws:ec2:{region}:{reservation.get('OwnerId', account_id)}:instance/{iid}"
+            tags = {t["Key"]: t["Value"] for t in inst.get("Tags", [])}
+            _upsert_asset(
+                db,
+                arn=arn,
+                type_="ec2-instance",
+                service="ec2",
+                name=tags.get("Name", iid),
+                region=region,
+                criticality=_criticality_from_tags(tags),
+                exposure="public" if inst.get("PublicIpAddress") else "private",
+            )
+            out.append({**inst, "Region": region, "Arn": arn})
+    return out
+
+
+def _collect_snapshots_images(db, ec2, region: str, account_id: str) -> tuple[list[dict], list[dict]]:
+    snapshots = []
+    for snap in _paginate(ec2, "describe_snapshots", "Snapshots", OwnerIds=["self"]):
+        sid = snap["SnapshotId"]
+        perms = ec2.describe_snapshot_attribute(
+            SnapshotId=sid, Attribute="createVolumePermission"
+        ).get("CreateVolumePermissions", [])
+        public = any(p.get("Group") == "all" for p in perms)
+        arn = f"arn:aws:ec2:{region}:{snap.get('OwnerId', account_id)}:snapshot/{sid}"
+        _upsert_asset(
+            db, arn=arn, type_="ebs-snapshot", service="ec2", name=sid, region=region,
+            exposure="public" if public else "private",
+        )
+        snapshots.append({**snap, "Public": public, "CreateVolumePermissions": perms,
+                          "Region": region, "Arn": arn})
+    images = []
+    for img in ec2.describe_images(Owners=["self"]).get("Images", []):
+        iid = img["ImageId"]
+        arn = f"arn:aws:ec2:{region}:{img.get('OwnerId', account_id)}:image/{iid}"
+        public = bool(img.get("Public"))
+        _upsert_asset(
+            db, arn=arn, type_="ami", service="ec2", name=img.get("Name") or iid, region=region,
+            exposure="public" if public else "private",
+        )
+        images.append({**img, "Public": public, "Region": region, "Arn": arn})
+    return snapshots, images
 
 
 def _collect_guardduty(db, scan, session, regions, account_id, errors) -> str:

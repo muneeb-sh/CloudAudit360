@@ -16,10 +16,42 @@
     <p class="text-sm text-gray-300">{{ finding.description }}</p>
     <h2 class="font-medium mt-4 mb-2">Remediation</h2>
     <p class="text-sm text-gray-300">{{ finding.remediation or 'N/A' }}</p>
+    {% if finding.status == 'FAIL' and (fix.console or fix.cli) %}
+    {% if fix.console %}
+    <h3 class="text-xs uppercase tracking-wide text-gray-400 mt-4 mb-1">Console steps</h3>
+    <p class="text-sm text-gray-300">{{ fix.console }}</p>
+    {% endif %}
+    {% if fix.cli %}
+    <div class="flex items-center justify-between mt-4 mb-1">
+      <h3 class="text-xs uppercase tracking-wide text-gray-400">AWS CLI fix</h3>
+      <button type="button" id="copy-cli" class="text-xs text-sea-600 hover:text-white cursor-pointer">Copy</button>
+    </div>
+    <pre id="cli-fix" class="text-xs font-mono bg-ink-950 rounded p-3 overflow-auto whitespace-pre-wrap break-all text-gray-200">{{ fix.cli }}</pre>
+    <p class="text-[11px] text-gray-500 mt-1">Replace the &lt;PLACEHOLDERS&gt; with values from the evidence. CloudAudit360 itself never makes changes; run this yourself after review.</p>
+    {% endif %}
+    {% endif %}
+    {% if fix.domain %}
+    <p class="text-xs text-gray-500 mt-4">
+      Shared responsibility: <a href="/responsibility" class="text-sea-600 hover:underline">customer · {{ fix.domain }} · {{ fix.service_model }}</a>
+      {% if fix.internet_exposure %} · <a href="/attack-surface" class="text-red-300 hover:underline">internet exposure</a>{% endif %}
+    </p>
+    {% endif %}
   </div>
   <div class="card p-4">
     <h2 class="font-medium mb-2">Evidence</h2>
     <pre class="text-xs font-mono bg-ink-950 rounded p-3 overflow-auto max-h-96 text-gray-300">{{ finding.evidence_json | tojson(indent=2) }}</pre>
   </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const btn = document.getElementById('copy-cli');
+  if (btn) btn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(document.getElementById('cli-fix').innerText);
+      btn.textContent = 'Copied';
+    } catch (e) { btn.textContent = 'Copy failed'; }
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+  });
+</script>
 {% endblock %}

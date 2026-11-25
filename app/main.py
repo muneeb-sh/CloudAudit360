@@ -100,6 +100,7 @@ def _register_routers() -> None:
         routes_admin,
         routes_api,
         routes_auth,
+        routes_cloud,
         routes_controls,
         routes_findings,
         routes_overview,
@@ -114,6 +115,7 @@ def _register_routers() -> None:
     app.include_router(routes_findings.router)
     app.include_router(routes_controls.router)
     app.include_router(routes_risks.router)
+    app.include_router(routes_cloud.router)
     app.include_router(routes_scans.router)
     app.include_router(routes_reviews.router)
     app.include_router(routes_reports.router)

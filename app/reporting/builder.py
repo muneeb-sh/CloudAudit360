@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy.orm import Session
 
+from app.assessment import catalog
 from app.config import REPORT_DIR
 from app.grc.compliance import framework_scores
 from app.models import (
@@ -76,6 +77,9 @@ def _build_context(db: Session, scan_id: int, report_type: str) -> dict:
         "regions": regions,
         "frameworks": sorted({s.framework for s in scores}),
         "comparison": comparison,
+        "responsibility": catalog.responsibility_matrix(findings),
+        "surface": catalog.attack_surface(findings),
+        "catalog_entry": catalog.entry,
         "fail_count": sum(1 for f in findings if f.status == "FAIL"),
         "pass_count": sum(1 for f in findings if f.status == "PASS"),
     }

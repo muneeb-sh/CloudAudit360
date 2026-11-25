@@ -100,3 +100,38 @@ kms_key_rotation_enabled:
   - {framework: ISO27001, ref: A.8.24}
   - {framework: NIST, ref: SC-12}
   - {framework: CIS, ref: "3.6"}
+
+ec2_no_public_snapshots:
+  - {framework: ISO27001, ref: A.8.3}
+  - {framework: NIST, ref: AC-3}
+
+ec2_imdsv2_required:
+  - {framework: ISO27001, ref: A.8.5}
+  - {framework: NIST, ref: AC-3}
+  - {framework: CIS, ref: "5.6"}
+
+rds_not_public:
+  - {framework: ISO27001, ref: A.8.3}
+  - {framework: ISO27001, ref: A.8.20}
+  - {framework: NIST, ref: SC-7}
+  - {framework: CIS, ref: "2.3.3"}
+
+iam_user_no_admin_access:
+  - {framework: ISO27001, ref: A.8.2}
+  - {framework: NIST, ref: AC-6}
+  - {framework: CIS, ref: "1.16"}
+
+iam_no_user_attached_policies:
+  - {framework: ISO27001, ref: A.5.15}
+  - {framework: NIST, ref: AC-6}
+  - {framework: CIS, ref: "1.15"}
+
+iam_unused_credentials_90d:
+  - {framework: ISO27001, ref: A.5.17}
+  - {framework: NIST, ref: IA-5}
+  - {framework: CIS, ref: "1.12"}
+
+sg_default_restricts_all:
+  - {framework: ISO27001, ref: A.8.20}
+  - {framework: NIST, ref: SC-7}
+  - {framework: CIS, ref: "5.4"}

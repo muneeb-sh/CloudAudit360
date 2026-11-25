@@ -64,6 +64,43 @@ def rds_encrypted(snapshots: dict[str, Any]) -> list[NormalizedFinding]:
     ]
 
 
+@register_check("rds_not_public")
+def rds_not_public(snapshots: dict[str, Any]) -> list[NormalizedFinding]:
+    findings: list[NormalizedFinding] = []
+    for rid, cfg in snapshots.get("rds", {}).items():
+        inst = cfg.get("DBInstance", cfg)
+        public = bool(inst.get("PubliclyAccessible"))
+        findings.append(
+            NormalizedFinding(
+                check_id="rds_not_public",
+                source="custom",
+                asset_arn=inst.get("DBInstanceArn") or f"arn:aws:rds:::db:{rid}",
+                title=f"RDS not publicly accessible: {inst.get('DBInstanceIdentifier', rid)}",
+                description="RDS instances should not have a public endpoint reachable from the internet.",
+                severity="high",
+                status="FAIL" if public else "PASS",
+                evidence={
+                    "PubliclyAccessible": public,
+                    "Endpoint": inst.get("Endpoint"),
+                    "VpcSecurityGroups": inst.get("VpcSecurityGroups"),
+                },
+                remediation="Modify the DB instance to turn off public accessibility; reach it via private subnets/VPN.",
+            )
+        )
+    return findings or [
+        NormalizedFinding(
+            check_id="rds_not_public",
+            source="custom",
+            title="RDS not publicly accessible",
+            description="No RDS instances found.",
+            severity="high",
+            status="PASS",
+            evidence={},
+            remediation="N/A",
+        )
+    ]
+
+
 @register_check("kms_key_rotation_enabled")
 def kms_key_rotation_enabled(snapshots: dict[str, Any]) -> list[NormalizedFinding]:
     keys = snapshots.get("kms", {}).get("keys", {}).get("Keys", [])
